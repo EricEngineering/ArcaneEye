@@ -1,0 +1,11 @@
+# ArcaneEye Python dependencies
+# Setup (Windows):  py -3.12 -m venv .venv && .venv\Scripts\python -m pip install -r requirements.txt
+# Setup (Linux):    python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
+#
+# Runtime: PySide6 (Qt for Python; tray, screen capture)
+#          pynput  (global hotkeys — the one non-Qt runtime dependency)
+# Build:   pyinstaller (only needed to produce the standalone app/installer)
+
+PySide6
+pynput
+pyinstaller

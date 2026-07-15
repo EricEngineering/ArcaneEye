@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working agreement
+- **Never `git commit` or `git push`.** Make changes in the working tree only and leave all committing/pushing to the user, even after a task is complete and verified — do not commit unless the user explicitly asks in that moment.
+
 ## What this is
 
 Arcane Eye ("Arcane Eye") is a small PySide6 (Qt for Python) **system-tray utility** for in-person tabletop RPGs where a TV is used as the shared tabletop. The GM presses a global hotkey, rubber-band-selects any region of their own screen, and that snip is instantly mirrored — scaled to a chosen percentage of a chosen monitor — onto a **frameless, always-on-top, transparent-background Player View window** on the players' TV. A second hotkey hides it. That is the entire app: quick "show them what's on my screen" mirroring, with no map/asset/scene model.

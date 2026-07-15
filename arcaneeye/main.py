@@ -55,8 +55,6 @@ def res_path(name: str) -> str:
 
 icon_path = res_path("icon.png")
 trayicon_path = res_path("trayicon.png")
-banner_path = res_path("banner.png")
-logo_path = res_path("logo.png")
 
 
 class WelcomeDialog(QDialog):

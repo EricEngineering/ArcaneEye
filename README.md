@@ -1,4 +1,4 @@
-![Logo](logo_small.png)
+<img src="arcaneeye/resources/icon.png" alt="Arcane Eye logo" width="150">
 
 **Arcane Eye** <br>
 A Screenshot Snip and Auto-Display tool for In-Person TTRPG (Table Top RPG Gaming) where a TV is used as a tabletop.<br><br>

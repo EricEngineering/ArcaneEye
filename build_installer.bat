@@ -46,7 +46,7 @@ echo [*] Staging installer assets (license + icon)...
 if not exist "installer\assets" mkdir "installer\assets"
 copy /Y "arcaneeye\resources\AGPL_V3.txt" "installer\assets\AGPL_V3.txt" >NUL
 if errorlevel 1 goto :stage_fail
-copy /Y "arcaneeye\resources\icon.ico" "installer\assets\installer.ico" >NUL
+copy /Y "arcaneeye\resources\installer.ico" "installer\assets\installer.ico" >NUL
 if errorlevel 1 goto :stage_fail
 
 echo [*] Locating Inno Setup compiler...
@@ -78,7 +78,7 @@ goto :end
 :stage_fail
 echo [!] Could not stage installer assets. Check that these exist:
 echo       arcaneeye\resources\AGPL_V3.txt
-echo       arcaneeye\resources\icon.ico
+echo       arcaneeye\resources\installer.ico
 goto :end
 
 :no_iscc

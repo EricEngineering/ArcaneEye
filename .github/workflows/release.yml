@@ -92,7 +92,7 @@ jobs:
           if not exist installer mkdir installer
           if not exist installer\assets mkdir installer\assets
           copy /Y arcaneeye\resources\AGPL_V3.txt installer\assets\AGPL_V3.txt
-          copy /Y arcaneeye\resources\icon.ico    installer\assets\installer.ico
+          copy /Y arcaneeye\resources\installer.ico installer\assets\installer.ico
           copy /Y arcaneeye.iss installer\arcaneeye.iss
           set "VERSION="
           for /f "tokens=2 delims== " %%v in ('findstr /b /c:"__version__" "arcaneeye\__init__.py"') do set "VERSION=%%~v"

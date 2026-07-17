@@ -14,7 +14,7 @@
 
 # This Python file uses the following encoding: utf-8
 
-import sys, platform, math
+import sys, os, platform, math
 from PySide6.QtWidgets import QMainWindow, QWidget, QApplication, QDialog, QSystemTrayIcon, QPushButton
 from PySide6.QtWidgets import QMenu, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QSizePolicy, QSpacerItem
 from PySide6.QtWidgets import QTextEdit, QScrollArea, QLayout
@@ -513,9 +513,24 @@ class TrayApp:
 
     def exit_app(self):
         self.tray_icon.hide()
-        # terminate the hotkey listener thread when quitting
-        self.hotkey_thread.terminate()
+        # Clean teardown of the hotkey listener (NOT QThread.terminate(), which
+        # left pynput's own Quartz CFRunLoop thread alive on macOS → a non-daemon
+        # thread blocks process exit, so the app hung in the Dock as "Not
+        # Responding"; see CLAUDE.md → clean shutdown). stop_listener() ends the
+        # pynput run loop, unblocking run()'s join(); then we wait() on the thread.
+        self.hotkey_thread.stop_listener()
+        if not self.hotkey_thread.wait(2000):  # ms; True if the thread finished
+            # Clean stop didn't finish in time — fall back to the old abrupt kill
+            # so we still make progress toward exit.
+            self.hotkey_thread.terminate()
+            self.hotkey_thread.wait(500)
         QApplication.quit()
+        # Belt-and-suspenders: guarantee the process actually dies even if a
+        # background thread (e.g. a wedged pynput/Quartz run loop) would otherwise
+        # keep it alive and hung in the Dock. os._exit() skips atexit/cleanup, but
+        # by here the tray icon is hidden and the Qt loop is told to quit, so
+        # there's nothing left worth unwinding.
+        os._exit(0)
 
     def run(self):
         sys.exit(self.app.exec())
@@ -563,6 +578,9 @@ class HotkeyListenerThread(QThread):
         # modifier-less key is unreliable and a buffered Esc mis-fires on the
         # next hotkey (see TrayApp.__init__ / CLAUDE.md → Wayland).
         self._include_esc = include_esc
+        # The pynput listener, held so exit_app can stop it cleanly (see
+        # stop_listener / CLAUDE.md → clean shutdown). None until run() starts.
+        self._listener = None
 
     def run(self):
         def on_activate_display():
@@ -573,8 +591,21 @@ class HotkeyListenerThread(QThread):
         hotkeys = {'<ctrl>+<shift>+X': on_activate_display}
         if self._include_esc:
             hotkeys['<esc>'] = on_activate_close
-        with keyboard.GlobalHotKeys(hotkeys) as listener:
-            listener.join()
+        # NOTE: don't use `with keyboard.GlobalHotKeys(...)` — we keep the
+        # listener on self so stop_listener() can end it from the GUI thread.
+        # GlobalHotKeys is itself a threading.Thread; on macOS it runs a Quartz
+        # CFRunLoop, and only its own .stop() ends that loop (QThread.terminate()
+        # does not) — see stop_listener / CLAUDE.md.
+        self._listener = keyboard.GlobalHotKeys(hotkeys)
+        self._listener.start()
+        self._listener.join()
+
+    def stop_listener(self):
+        """Cleanly stop the pynput listener (its .stop() ends the platform run
+        loop — CFRunLoopStop on macOS), which unblocks join() so run() returns
+        and this QThread can be wait()ed. Replaces the old QThread.terminate()."""
+        if self._listener is not None:
+            self._listener.stop()
 
 def main() -> int:
     """Entry point for module execution."""

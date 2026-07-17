@@ -215,6 +215,22 @@ jobs:
           security default-keychain -s "$KEYCHAIN"
           rm -f "$RUNNER_TEMP/cert.p12"
 
+      # Generate the macOS app icon (.icns) from icon.png using the runner's native
+      # sips + iconutil (no committed binary, same "produce it in CI" approach as the
+      # rest of the mac build). The spec's BUNDLE auto-picks up resources/icon.icns when
+      # present — without it the .app falls back to the generic Python icon.
+      - name: Generate app icon (.icns)
+        run: |
+          SRC=arcaneeye/resources/icon.png
+          ICONSET="$RUNNER_TEMP/ArcaneEye.iconset"
+          rm -rf "$ICONSET" && mkdir -p "$ICONSET"
+          for size in 16 32 128 256 512; do
+            sips -z "$size" "$size"           "$SRC" --out "$ICONSET/icon_${size}x${size}.png"
+            sips -z "$((size*2))" "$((size*2))" "$SRC" --out "$ICONSET/icon_${size}x${size}@2x.png"
+          done
+          iconutil -c icns "$ICONSET" -o arcaneeye/resources/icon.icns
+          ls -l arcaneeye/resources/icon.icns
+
       - name: Build with PyInstaller (universal2; signs during build when identity is set)
         run: python3.12 -m PyInstaller --noconfirm arcaneeye.spec
 

@@ -243,12 +243,15 @@ class DisplayWindow(QWidget): # Changed to QWidget from QMainWindow
         print(f"label SZ       W:{self.label.width()} H:{self.label.height()}")
 
     def _place_on_target(self):
-        """Show the window fullscreen on the target screen.
+        """Show the window fullscreen on the target screen. Three platform paths:
 
-        X11 / Windows / macOS take the original, proven path: setGeometry positions
-        onto the target screen and showFullScreen() fullscreens (+ activates)
-        there. **All the workarounds below are Wayland-only** — the non-Wayland
-        branch is unchanged from the original behavior.
+        X11 / Windows: the original, proven path — setGeometry positions onto the
+        target screen and showFullScreen() fullscreens (+ activates) there.
+
+        macOS: cover the target screen by GEOMETRY + show() (not showFullScreen()).
+        showFullScreen() enters the native full-screen Space, and hiding that Space
+        leaves the screen black (same native-Space bug as the snip overlay). Geometry-
+        cover gives the same full-screen Player View but hides cleanly.
 
         Wayland needs two things and gets its own branch:
           * NON-activating fullscreen (setWindowState + show under WA_ShowWithout-
@@ -271,8 +274,18 @@ class DisplayWindow(QWidget): # Changed to QWidget from QMainWindow
             self.setWindowState(self.windowState() | Qt.WindowFullScreen)
             self.show()
             self.raise_()
+        elif sys.platform == "darwin":
+            # macOS: cover the target screen by geometry — NOT showFullScreen(),
+            # which enters the native full-screen Space. Hiding that Space (Esc →
+            # window.hide()) leaves the screen black, exactly like the snip overlay
+            # (see screensnip.py / CLAUDE.md → macOS). Geometry-cover gives the same
+            # full-screen Player View but hides cleanly with no black.
+            self.setScreen(screen)
+            self.setGeometry(screen.geometry())
+            self.show()
+            self.raise_()
         else:
-            # X11 / Windows / macOS: the original behavior, unchanged.
+            # X11 / Windows: the original behavior, unchanged.
             self.setScreen(screen)
             self.setGeometry(screen.geometry())
             self.showFullScreen()

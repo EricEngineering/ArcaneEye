@@ -19,9 +19,12 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 from PySide6.QtCore import Qt, QThread, Signal, QEventLoop, QEvent
 from PySide6.QtGui import QIcon
+import sys
 import time
 
-from arcaneeye.capture import is_wayland_session, portal_grab_fullscreen
+from arcaneeye.capture import (
+    is_wayland_session, portal_grab_fullscreen, macos_ensure_screen_permission,
+)
 
 
 class CaptureScreen(QtWidgets.QLabel):
@@ -87,7 +90,17 @@ class CaptureScreen(QtWidgets.QLabel):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setPixmap(screenPixMap)
 
-        self.setWindowState(QtCore.Qt.WindowFullScreen)
+        if sys.platform == "darwin":
+            # macOS: setWindowState(WindowFullScreen) triggers the *native*
+            # full-screen Space — a separate, animated desktop. A frameless,
+            # translucent overlay in that Space renders as opaque black (not a
+            # 40% dim over the live desktop), and tearing the Space down leaves
+            # the screen black. Cover the screen by geometry instead: same dim,
+            # no Space, dismisses cleanly. (Win / X11 / Wayland keep
+            # WindowFullScreen, a plain borderless maximize that works there.)
+            self.setGeometry(primScreenGeo)
+        else:
+            self.setWindowState(QtCore.Qt.WindowFullScreen)
 
     def mousePressEvent(self, event):
         """Show rectangle at mouse position when left-clicked"""
@@ -105,6 +118,27 @@ class CaptureScreen(QtWidgets.QLabel):
         if event.button() == QtCore.Qt.LeftButton:
             self.end = event.position().toPoint()
             self.rubberBand.hide()
+
+            # Selection rect in this (fullscreen) widget's local coords.
+            # normalized() makes it valid for any drag direction, which also
+            # fixes the old "only drag down-right works" bug.
+            rect = QtCore.QRect(self.origin, self.end).normalized()
+
+            if sys.platform == "darwin":
+                # macOS: NO blocking time.sleep here — a synchronous sleep freezes
+                # the window server so the overlay can't actually leave the screen,
+                # which is what left the whole display black. hide() removes the
+                # overlay (and fires hideEvent, releasing screenSnip's handshake
+                # loop), then _wait_pumping() spins the event loop briefly so the
+                # desktop recomposites WITHOUT the overlay before we grab. The grab
+                # still completes inside this handler, so screenSnip reads a valid
+                # pixmap. (grabbedPixMap stays valid whether or not permission is
+                # granted — see _grab_macos.)
+                self.hide()
+                self._wait_pumping(250)
+                self.grabbedPixMap = self._grab_macos(rect)
+                return
+
             self.setWindowOpacity(0)
             self.repaint()      #find a better way to do this
             self.hide()         #find a better way to do this
@@ -112,11 +146,6 @@ class CaptureScreen(QtWidgets.QLabel):
             # otherwise it would appear in the screenshot.
             QtWidgets.QApplication.processEvents()
             time.sleep(0.2)     #find a better way to do this
-
-            # Selection rect in this (fullscreen) widget's local coords.
-            # normalized() makes it valid for any drag direction, which also
-            # fixes the old "only drag down-right works" bug.
-            rect = QtCore.QRect(self.origin, self.end).normalized()
 
             if is_wayland_session():
                 self.grabbedPixMap = self._grab_wayland(rect)
@@ -126,6 +155,29 @@ class CaptureScreen(QtWidgets.QLabel):
     def _grab_x11(self, rect):
         """Direct region grab (X11 / Windows). grabWindow(0, ...) reads the root
         window at the overlay-local coordinates, matching the original behavior."""
+        primaryScreen = QtGui.QGuiApplication.primaryScreen()
+        return primaryScreen.grabWindow(0, rect.x(), rect.y(), rect.width(), rect.height())
+
+    def _wait_pumping(self, ms):
+        """Spin the event loop for ``ms`` milliseconds WITHOUT blocking the thread
+        (unlike time.sleep). Used on macOS after hide() so the window server can
+        repaint the desktop with the overlay gone before we grab. A nested
+        QEventLoop quit by a one-shot timer keeps events flowing (no busy-wait,
+        no frozen compositor). macOS path only — the other platforms keep their
+        proven hide()/processEvents()/sleep sequence untouched."""
+        loop = QtCore.QEventLoop()
+        QtCore.QTimer.singleShot(ms, loop.quit)
+        loop.exec()
+
+    def _grab_macos(self, rect):
+        """macOS region grab. grabWindow(0, ...) works here *with* Screen
+        Recording permission (System Settings → Privacy & Security → Screen
+        Recording); without it macOS returns a black image rather than failing.
+        macos_ensure_screen_permission() triggers the one-time system prompt and
+        surfaces guidance if access still isn't granted, then we grab regardless
+        (a black pixmap is the worst case, never a crash). Coordinates match the
+        X11 path: overlay-local, primary-screen-relative."""
+        macos_ensure_screen_permission(self)
         primaryScreen = QtGui.QGuiApplication.primaryScreen()
         return primaryScreen.grabWindow(0, rect.x(), rect.y(), rect.width(), rect.height())
 

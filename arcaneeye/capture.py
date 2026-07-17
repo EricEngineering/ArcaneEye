@@ -58,6 +58,85 @@ def is_wayland_session() -> bool:
         os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
 
 
+# --- macOS Screen Recording permission (TCC) -------------------------------
+# grabWindow(0, ...) works on macOS, but ONLY once the app holds Screen Recording
+# permission; without it macOS silently hands back a BLACK image instead of
+# failing. Windows and X11 need no such gate (and Wayland uses the portal), so
+# every function below is a no-op returning True off macOS — the working
+# Win/Linux paths never touch this.
+
+_MACOS_PERM_WARNED = False  # show the guidance dialog at most once per session
+
+
+def _macos_coregraphics():
+    """Load the CoreGraphics framework (holds the CGScreenCaptureAccess APIs)."""
+    import ctypes
+    return ctypes.CDLL(
+        "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics"
+    )
+
+
+def _macos_preflight_screen_capture() -> bool:
+    """True if Screen Recording access is already granted (macOS 10.15+).
+    Assumes granted if the API/framework can't be loaded, so we never block the
+    (still-attempted) grab on an older or unexpected macOS."""
+    try:
+        import ctypes
+        fn = _macos_coregraphics().CGPreflightScreenCaptureAccess
+        fn.restype = ctypes.c_bool
+        return bool(fn())
+    except Exception:
+        return True
+
+
+def _macos_request_screen_capture() -> bool:
+    """Trigger the one-time system Screen Recording prompt and register the app
+    in the Screen Recording list; returns the (current) grant state. The grant
+    only takes effect after the app relaunches, so this often returns False the
+    first time even though the prompt succeeded."""
+    try:
+        import ctypes
+        fn = _macos_coregraphics().CGRequestScreenCaptureAccess
+        fn.restype = ctypes.c_bool
+        return bool(fn())
+    except Exception:
+        return True
+
+
+def macos_ensure_screen_permission(dialog_parent=None) -> bool:
+    """Ensure macOS Screen Recording permission before a grabWindow() capture.
+
+    Returns True when access is granted. On macOS: preflight, and if not granted
+    fire the system prompt (which also lists the app under Screen Recording); if
+    it's still not granted (a fresh grant needs a relaunch to take effect) show a
+    one-time guidance dialog pointing at System Settings. No-op returning True off
+    macOS so the Windows/Linux capture paths are completely unaffected."""
+    global _MACOS_PERM_WARNED
+    if sys.platform != "darwin":
+        return True
+
+    if _macos_preflight_screen_capture():
+        return True
+    if _macos_request_screen_capture():
+        return True
+
+    if not _MACOS_PERM_WARNED:
+        _MACOS_PERM_WARNED = True
+        try:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                dialog_parent,
+                "Screen Recording permission needed",
+                "Arcane Eye needs macOS Screen Recording permission to capture "
+                "your screen.\n\n"
+                "Open System Settings → Privacy & Security → Screen "
+                "Recording, enable Arcane Eye, then quit and reopen the app.",
+            )
+        except Exception:
+            pass
+    return False
+
+
 class _PortalShooter(QObject):
     """One portal Screenshot request, awaited on the app's QDBus connection."""
 

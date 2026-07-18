@@ -539,6 +539,16 @@ class TrayApp:
         print("Snipping...")
         snip = CaptureScreen()
         snip.show()
+        if sys.platform == "darwin":
+            # macOS: the overlay is placed by geometry + show() (not the native
+            # fullscreen that auto-activates — see screensnip.py / CLAUDE.md → macOS).
+            # A snip is usually launched by the global hotkey while ANOTHER app is
+            # frontmost, so the overlay isn't the key window, and macOS only honors
+            # its crosshair cursor once it IS key — otherwise the cursor changes
+            # only on the first click (which activates it). Activate it up front so
+            # the crosshair shows immediately, matching Win/Linux.
+            snip.raise_()
+            snip.activateWindow()
         # Wait until the Snip is Done by monitoring for the widget to be hidden
         loop = QEventLoop()
         snip.hideEvent = lambda event: loop.quit()

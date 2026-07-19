@@ -38,7 +38,7 @@ There is **no test suite, linter, CI, or `.ui` file** — the entire GUI is hand
 - **PySide6** — the GUI, tray icon, screen grab, and pixmap scaling.
 - **pynput** — OS-level global hotkeys (works even when no Arcane Eye window has focus). This is the one non-Qt dependency and the main portability risk (see Gotchas).
 
-Dev/prod runs on **Python 3.14** locally (the `.venv`), though the README still says 3.12 — same bleeding-edge PySide6/shiboken stack as ArcaneAtlas.
+Runtime is pinned to **Python 3.13** (dev `.venv` + README), standardized across all three apps after the local dev `.venv` had been on bleeding-edge **3.14** (intermittent PySide6/shiboken native crashes); shipped builds had already been on stable **3.12**, now unifying on 3.13. Same stack as ArcaneAtlas — see its CLAUDE.md *"Runtime — pinned to Python 3.13"* note.
 
 ## Architecture
 

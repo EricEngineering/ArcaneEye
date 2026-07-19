@@ -24,7 +24,7 @@ helps cover the cost and keeps development going. Thank you!
 
 ## Technical
 
-Written in Python 3.12 and uses the Qt framework to stay compatible with Linux,
+Written in Python 3.13 and uses the Qt framework to stay compatible with Linux,
 Windows and Mac.
 
 Dependencies:
